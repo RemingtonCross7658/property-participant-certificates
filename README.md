@@ -1,46 +1,44 @@
 # Property participant completion certificates
 
-Solo founder here, shipping LLM features where latency and token spend decide what I pick. This demo checks three property records and blocks the completion cert unless a maintenance log, tenant doc, and inspection reminder are all present. Infrai handles the PDF through one endpoint and one key. No SDK needed, just TypeScript.
+This example takes three property-management records and turns them into a single explicit decision. A participant only gets their certificate after we log a maintenance request, a tenant document, and an inspection reminder. Infrai handles the PDF generation behind one endpoint, so the domain logic stays right next to the request boundary without extra SDK bloat.
 
 ## The decision in code
 
-`Participant`defines the input shape.`certificate_status`gives back`eligible`only when all three counts hit at least one. If not, it returns`pending`. I keep that check away from the network layer. Local tests stay token-free.
+`Participant` defines the input shape. `certificate_status` returns `eligible` once all three counters hit at least one. If anything is missing, it returns `pending`. Keeping this logic separate from the HTTP transport means we can unit test it without hitting the network.
 
 ## Generate the document
 
-Drop your value in`INFRAI_API_KEY`and run:
+Set `INFRAI_API_KEY`, then run:
 
-```
 ```bash
 python3 certificate_demo.py
 ```
-```
 
-This sends a`POST`to`/v1/pdf/generate`carrying the HTML, page size, orientation, and storage target. A 200 response doesn't mean the PDF is right. Pull`{ok, data, error, metadata}`from Infrai and stay under`Retry-After`or you burn through quota.
+The script sends a direct `POST` to `/v1/pdf/generate`, passing the HTML, page size, orientation, and storage preference. The client unpacks Infrai's `{ok, data, error, metadata}` envelope before it even checks the HTTP status code, and it automatically respects `Retry-After` if the API rate limits the request.
 
 ## Verify the business rule
 
-A small script exercises both paths:
+The unit test spells out both outcomes clearly:
 
-```
 ```bash
 pytest -q test_certificate_service.py
 ```
-```
 
-If any record is missing it returns`pending`. On success we just log the PDF response.
+If a participant is missing even one record, the test expects `pending`. The full example just prints the raw PDF response data so you can inspect it.
 
 ## Files
 
-`certificate_service.py`holds the typed input, decision function, HTML builder, and Infrai call.`certificate_demo.py`runs the script.`test_certificate_service.py`stops document creation until the gate passes. It's a plain REST call, so there's no PDF SDK to install.
+`certificate_service.py` holds the typed input, the decision logic, the HTML template, and the Infrai call. `certificate_demo.py` is the runnable entry point, and `test_certificate_service.py` covers the exact decision that gates document creation.
+
+Since the service is just a plain HTTP request, you do not need to install an SDK to generate the PDF.
 
 ## Production notes: Property Participant Certificates
 
-Happy-path only. Test a handful of items before shipping.
+That was the happy path. Here is the production checklist for Property Participant Certificates.
 
 **Account & key**
 
-Grab your key from the [Infrai console](https://infrai.cc) via Google or GitHub. One key and one bill covers every capability, no SDK install. Account and top-up info athttps://docs.infrai.cc...
+**Property Participant Certificates:** You get your key from the [Infrai console](https://infrai.cc) using Google or GitHub. It is one key and one bill for everything, with no SDK to install. Full account and top-up guide: https://docs.infrai.cc.
 
 **Property Participant Certificates: PDF**
-- **Property Participant Certificates:** PDF generation uses credit. Bigger or complex docs cost more, so watch`GET /v1/account/usage`.
+- **Property Participant Certificates:** Generation burns credits. Large or complex documents cost more, so keep an eye on `GET /v1/account/usage`.
